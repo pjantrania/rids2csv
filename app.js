@@ -24,7 +24,7 @@ http.createServer(
             getcsv.getCsv(date, response);
         }
         else {
-            parser.getStream().pipe(response)
+            parser.getStream().pipe(response);
             var requestUrl = process.env.REQUEST_URL;
             http.get(requestUrl,
                 (res) => {
@@ -33,6 +33,7 @@ http.createServer(
                     });
                     res.on("end", () => {
                         parser.endParse();
+                        response.end();
                     });
                 });
         }

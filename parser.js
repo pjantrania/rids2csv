@@ -46,7 +46,6 @@ var getStream = () => { return outStream };
 var parse = (data) => { parser.write(data) };
 var endParse = () => {
     parser.end();
-    outStream.end();
 }
 
 exports.getStream = getStream;
