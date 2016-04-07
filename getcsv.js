@@ -1,5 +1,7 @@
 var azure = require("azure-storage"),
-    http = require("http");
+    http = require("http"),
+    strftime = require("strftime"),
+    MemoryStream = require("memorystream");
 var parser = require("./parser");
 
 var blobSvc = azure.createBlobService();
@@ -10,42 +12,51 @@ blobSvc.createContainerIfNotExists('csvs', (error, result, response) => {
 });
 
 
-var getCsv = (date, outStream) => {
-    if (!date) {
+var getCsv = (startDate, endDate, outStream) => {
+    if (!startDate || !endDate) {
         return false;
     }
 
-    blobSvc.doesBlobExist('csvs', date, (error, blobResult, blobResponse) => {
+    if (startDate > endDate) {
+        outStream.end();
+        return true;
+    }
+
+    var prevDate = new Date(endDate).setDate(new Date(endDate).getDate());
+    var prevDateString = strftime("%Y-%m-%d", new Date(prevDate));
+    blobSvc.doesBlobExist('csvs', endDate, (error, blobResult, blobResponse) => {
         if (!error) {
             if (blobResult.exists) {
-                blobSvc.getBlobToStream('csvs', date, outStream,
+                var tempStream = new MemoryStream();
+                tempStream.pipe(outStream, {end: false});
+                blobSvc.getBlobToStream('csvs', endDate, tempStream,
                     (error, getResult, getResponse) => {
                         if (!error) {
-                            outStream.end();
+                            outStream.write("\n");
+                            getCsv(startDate, prevDateString, outStream);
                         }
                     });
             }
             else {
-                var blobStream = blobSvc.createWriteStreamToBlockBlob('csvs', date, null);
+                var blobStream = blobSvc.createWriteStreamToBlockBlob('csvs', endDate, null);
                 var parsedDataStream = parser.getStream();
-
-                parsedDataStream.pipe(outStream, { end: false });
                 parsedDataStream.pipe(blobStream, { end: false });
-
-                var requestUrl = process.env.REQUEST_URL + "&fdate=" + date;
-                http.get(requestUrl,
-                    (res) => {
-                        res.on("data", (d) => {
-                            parser.parse(d.toString());
-                        });
-                        res.on("end", () => {
-                            parser.endParse();
-                            blobStream.end();
-                            outStream.end();
-                        });
-                    });
+                
+                var requestUrl = process.env.REQUEST_URL + "&fdate=" + endDate;
+                setTimeout(() => {
+                    http.get(requestUrl,
+                        (res) => {
+                            res.on("data", (d) => {
+                                parser.parse(d.toString());
+                            });
+                            res.on("end", () => {
+                                parser.endParse();
+                                blobStream.end();
+                                getCsv(startDate, endDate, outStream);
+                            });
+                        })
+                }, 500);
             }
-
         }
     });
 };

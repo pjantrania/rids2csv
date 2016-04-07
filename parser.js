@@ -27,6 +27,8 @@ var parser = new htmlparser.Parser({
         }
         else if (inTable && name === "tr" && attribs.bgcolor === "#000000") {
             inTable = false;
+            inCell = false;
+            previousColor = null;
         }
     },
     ontext: (text) => {
