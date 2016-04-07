@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "azure-storage": "^0.10.0",
-    "htmlparser2": "^3.9.0"
+    "htmlparser2": "^3.9.0",
+    "memorystream": "^0.3.1"
   }
 }

@@ -1,7 +1,8 @@
 var http = require("http"),
     urlparse = require("url"),
-    htmlparser = require("htmlparser2"),
     azure = require("azure-storage");
+
+var parser = require("./parser");
 
 var port = process.env.PORT || 8080;
 var blobSvc = azure.createBlobService();
@@ -42,63 +43,20 @@ http.createServer(
                     if (date) {
                         blobStream = blobSvc.createWriteStreamToBlockBlob('csvs', date, null);
                     }
-                    var previousColor = null;
-                    var inTable = false;
-                    var inCell = false;
-                    var parser = new htmlparser.Parser({
-                        onopentag: (name, attribs) => {
-                            if (name === "table" && attribs.bgcolor === "#101010") {
-                                inTable = true;
-                            }
-                            else if (name === "td" && (attribs.bgcolor === "#202060" || attribs.bgcolor === "#404080") && inTable) {
-                                if (!inCell) {
-                                    inCell = true;
-                                }
-
-                                if (previousColor === null) {
-                                    previousColor = attribs.bgcolor;
-                                }
-
-                                if (previousColor !== null && previousColor !== attribs.bgcolor) {
-                                    if (blobStream) {
-                                        blobStream.write("\n");
-                                    }
-                                    response.write("\n");
-                                    previousColor = attribs.bgcolor;
-                                }
-
-                            }
-                            else if (inTable && name === "tr" && attribs.bgcolor === "#000000") {
-                                inTable = false;
-                            }
-                        },
-                        ontext: (text) => {
-                            if (inTable && inCell && text.trim() !== "--:--:--") {
-                                if (blobStream) {
-                                    blobStream.write(text.trim());
-                                }
-                                response.write(text.trim());
-                            }
-                        },
-                        onclosetag: (name) => {
-                            if (name === "td" && inCell && inTable) {
-                                if (blobStream) {
-                                    blobStream.write(",");
-                                }
-                                response.write(",");
-                                inCell == false;
-                            }
-                        }
-                    }, { decodeEntities: true });
+                    var parsedDataStream = parser.getStream();
+                    parsedDataStream.pipe(response, { end: false });
+                    if (blobStream) {
+                        parsedDataStream.pipe(blobStream, { end: false });
+                    }
 
                     http.get(requestUrl,
                         (res) => {
                             res.on("data", (d) => {
-                                parser.write(d.toString());
+                                parser.parse(d.toString());
 
                             });
                             res.on("end", () => {
-                                parser.end();
+                                parser.endParse();
                                 if (blobStream) {
                                     blobStream.end();
                                 }
